@@ -86,7 +86,7 @@ RUN curl --fail --location --proto '=https' --tlsv1.2 --silent --show-error \
   && nix --version
 
 # The entrypoint requires root briefly for mounted-volume ownership and Docker-socket group setup.
-# hadolint ignore=DL3002
+# hadolint ignore=DL3002,DL3066
 USER root
 
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
