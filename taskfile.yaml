@@ -1,0 +1,15 @@
+---
+version: '3'
+
+includes:
+  devbox: ./subtasks.yaml
+
+tasks:
+
+  default:
+    # desc: A Hidden Default Action To List Available Commands.
+    cmds:
+      - task -l
+    silent: true
+    aliases:
+      - list

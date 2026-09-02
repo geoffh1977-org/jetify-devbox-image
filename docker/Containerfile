@@ -1,0 +1,101 @@
+# Devbox portable development environment container.
+FROM ubuntu:24.04
+
+ARG UNAME=devbox
+ARG UID=1000
+ARG GID=1000
+ARG DEVBOX_VERSION
+ARG TARGETARCH=amd64
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Ubuntu packages are verified through the signed Ubuntu package repositories.
+# hadolint ignore=DL3008
+RUN apt-get update \
+  && apt-get install --no-install-recommends --yes \
+    ca-certificates \
+    curl \
+    direnv \
+    git \
+    gnupg \
+    locales \
+    make \
+    openssh-client \
+    sudo \
+    xz-utils \
+  && sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen \
+  && locale-gen \
+  && update-locale LANG=en_US.UTF-8 LANGUAGE=en_US:en \
+  && rm -rf /var/lib/apt/lists/*
+
+ENV LANG=en_US.UTF-8 \
+  LANGUAGE=en_US:en
+
+# Create a configurable non-root user. Delete a conflicting UID before
+# resolving the group: userdel removes a matching user's private group.
+RUN if getent passwd "${UNAME}" >/dev/null; then userdel --remove "${UNAME}"; fi \
+  && if conflicting_user="$(getent passwd "${UID}" | cut -d: -f1)"; [ -n "${conflicting_user}" ]; then userdel --remove "${conflicting_user}"; fi \
+  && if ! getent group "${GID}" >/dev/null; then groupadd --gid "${GID}" "${UNAME}"; fi \
+  && group_name="$(getent group "${GID}" | cut -d: -f1)" \
+  && useradd --create-home --uid "${UID}" --gid "${group_name}" --shell /bin/bash "${UNAME}" \
+  && printf '%s\n' "${UNAME} ALL=(root) NOPASSWD: /usr/bin/apt, /usr/bin/apt-get" > /etc/sudoers.d/"${UNAME}" \
+  && chmod 0440 /etc/sudoers.d/"${UNAME}"
+
+# Install the requested Devbox release for the target architecture.
+RUN test -n "${DEVBOX_VERSION:-}" \
+  || { echo "DEVBOX_VERSION build argument is required" >&2; exit 1; } \
+  && case "${TARGETARCH}" in \
+    amd64|arm64) ;; \
+    *) echo "Unsupported Devbox architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+  esac \
+  && devbox_archive="devbox_${DEVBOX_VERSION}_linux_${TARGETARCH}.tar.gz" \
+  && curl --fail --location --silent --show-error \
+    --output "/tmp/${devbox_archive}" \
+    "https://github.com/jetify-com/devbox/releases/download/${DEVBOX_VERSION}/${devbox_archive}" \
+  && tar --extract --gzip --file "/tmp/${devbox_archive}" --directory /usr/local/bin devbox \
+  && rm "/tmp/${devbox_archive}" \
+  && devbox version
+
+ENV USER=${UNAME} \
+  HOME=/home/${UNAME} \
+  NONROOT_USER=${UNAME} \
+  PATH=/home/${UNAME}/.nix-profile/bin:/usr/local/bin:/home/${UNAME}/.local/bin:${PATH}
+
+WORKDIR /home/${UNAME}
+
+# Use the Nix-supported single-user installer. The store is owned by the
+# non-root image user, so no daemon is needed at build or runtime.
+RUN mkdir -p /nix \
+  && chown "${UNAME}:${GID}" /nix \
+  && chmod 0755 /nix
+
+USER ${UNAME}
+
+RUN curl --fail --location --proto '=https' --tlsv1.2 --silent --show-error \
+    https://nixos.org/nix/install \
+  | sh -s -- --no-daemon \
+  && nix --version
+
+# The entrypoint requires root briefly for mounted-volume ownership and Docker-socket group setup.
+# hadolint ignore=DL3002
+USER root
+
+COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 0755 /usr/local/bin/entrypoint.sh \
+  && mkdir -p "/home/${UNAME}/.config/direnv" \
+  && printf '%s\n' \
+    '[global]' \
+    "log_filter = \"^\$\"" \
+    '[whitelist]' \
+    'prefix = ["/Project"]' \
+    > "/home/${UNAME}/.config/direnv/direnv.toml" \
+  && printf '%s\n' \
+    "export HISTFILE=\"\$HOME/.config/bash/history\"" \
+    "eval \"\$(direnv hook bash)\"" \
+    >> "/home/${UNAME}/.bashrc" \
+  && chown -R "${UNAME}:${GID}" "/home/${UNAME}"
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["/bin/bash"]

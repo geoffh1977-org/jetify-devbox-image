@@ -1,0 +1,8 @@
+# GitIgnore File
+
+# Ignore Devbox Files
+.devbox/
+devbox.lock
+
+# Ignore Environment Files
+.devcontainer/.env

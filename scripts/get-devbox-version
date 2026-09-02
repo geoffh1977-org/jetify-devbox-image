@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+project_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+version_file="$project_root/.devbox-version"
+latest_release_url='https://github.com/jetify-com/devbox/releases/latest'
+
+resolved_url=$(curl --fail --location --proto =https --silent --show-error --output /dev/null \
+    --write-out '%{url_effective}' "$latest_release_url")
+case "$resolved_url" in
+    https://github.com/jetify-com/devbox/releases/tag/*) ;;
+    *)
+        printf 'Latest-release redirect did not resolve to the expected Devbox release tag: %s\n' "$resolved_url" >&2
+        exit 1
+        ;;
+esac
+version=${resolved_url##*/}
+
+case "$version" in
+    '' | *[!A-Za-z0-9.+-]*)
+        printf 'Unable to derive a safe Devbox version from %s\n' "$resolved_url" >&2
+        exit 1
+        ;;
+esac
+
+# Complete the replacement in the same directory, then atomically rename it into place.
+temp_file=$(mktemp "$project_root/.devbox-version.XXXXXX")
+cleanup() {
+    if [ -n "${temp_file:-}" ]; then
+        rm -f -- "$temp_file"
+    fi
+}
+trap cleanup EXIT HUP INT TERM
+printf '%s\n' "$version" >"$temp_file"
+mv -f -- "$temp_file" "$version_file"
+temp_file=''

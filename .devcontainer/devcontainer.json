@@ -1,0 +1,28 @@
+{
+  "name": "Devbox",
+  "dockerComposeFile": ["devbox.compose.yaml"],
+  "service": "dev",
+  "workspaceFolder": "/Project",
+  "remoteUser": "devbox",
+  "shutdownAction": "stopCompose",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "EditorConfig.EditorConfig",
+        "exiasr.hadolint",
+        "mkhl.direnv",
+        "ms-vscode-remote.remote-containers",
+        "timonwong.shellcheck"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "Devbox Shell",
+        "terminal.integrated.profiles.linux": {
+          "Devbox Shell": {
+            "path": "/bin/bash",
+            "args": ["-lc", "exec devbox shell"]
+          }
+        }
+      }
+    }
+  }
+}
