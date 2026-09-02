@@ -5,6 +5,7 @@ A development container image that installs [Jetify Devbox](https://www.jetify.c
 ## Features
 
 - Ubuntu 24.04 base image with Devbox installed from its release archive.
+- Published images support Linux `amd64` and `arm64` hosts.
 - Common development utilities including Git, curl, direnv, Make, and OpenSSH client.
 - Configurable non-root user and startup handling for mounted development directories and the Docker socket.
 
