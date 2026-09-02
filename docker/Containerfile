@@ -6,6 +6,8 @@ ARG UID=1000
 ARG GID=1000
 ARG DEVBOX_VERSION
 ARG TARGETARCH=amd64
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -75,7 +77,12 @@ USER ${UNAME}
 
 RUN curl --fail --location --proto '=https' --tlsv1.2 --silent --show-error \
     https://nixos.org/nix/install \
-  | sh -s -- --no-daemon \
+  | { \
+    if [ "${BUILDPLATFORM}" != "${TARGETPLATFORM}" ]; then \
+      export NIX_CONFIG='filter-syscalls = false'; \
+    fi; \
+    sh -s -- --no-daemon; \
+  } \
   && nix --version
 
 # The entrypoint requires root briefly for mounted-volume ownership and Docker-socket group setup.
