@@ -2,6 +2,11 @@ name: Docker Image
 
 on:
   push:
+    paths:
+      - ".devbox-version"
+      - "docker/**"
+      - ".github/workflows/_docker_image.yml"
+      - ".github/workflows/jetify-devbox-image.yml"
 
 permissions:
   contents: read

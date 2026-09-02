@@ -1,0 +1,23 @@
+name: Update Jetify Devbox Docker Hub Documentation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - README.md
+      - .github/workflows/jetify-devbox-document.yml
+      - .github/workflows/_docker_document.yml
+
+permissions:
+  contents: read
+
+jobs:
+  update-docker-hub-description:
+    uses: ./.github/workflows/_docker_document.yml
+    with:
+      image: ${{ vars.DOCKER_USERNAME }}/jetify-devbox
+      docker-username: ${{ vars.DOCKER_USERNAME }}
+      markdown-file: README.md
+    secrets:
+      docker-password: ${{ secrets.DOCKER_PASSWORD }}
