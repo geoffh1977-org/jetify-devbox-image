@@ -12,6 +12,7 @@ services:
 
     volumes:
       # Per-user caches persist without replacing the image's Nix store.
+      - nix_store:/nix
       - devbox_user_cache:/home/${UNAME:-devbox}/.devbox
       - bash_user_cache:/home/${UNAME:-devbox}/.config/bash
 
@@ -38,5 +39,6 @@ services:
       - seccomp:unconfined
 
 volumes:
+  nix_store:
   devbox_user_cache:
   bash_user_cache:

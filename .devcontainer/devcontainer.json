@@ -1,6 +1,8 @@
 {
   "name": "Devbox",
-  "dockerComposeFile": ["devbox.compose.yaml"],
+  "dockerComposeFile": [
+    "devbox.compose.yaml"
+  ],
   "service": "dev",
   "workspaceFolder": "/Project",
   "remoteUser": "devbox",
@@ -19,7 +21,10 @@
         "terminal.integrated.profiles.linux": {
           "Devbox Shell": {
             "path": "/bin/bash",
-            "args": ["-lc", "exec devbox shell"]
+            "args": [
+              "-lc",
+              "exec devbox shell"
+            ]
           }
         }
       }
