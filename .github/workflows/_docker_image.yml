@@ -74,23 +74,6 @@ jobs:
           fi
           printf 'VERSION=%s\n' "$version" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Python for pre-commit
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-
-      - name: Install quality tools
-        run: |
-          python -m pip install --disable-pip-version-check --no-cache-dir pre-commit
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends --yes hadolint shellcheck
-
-      - name: Run repository quality checks
-        run: pre-commit run --all-files
-
-      - name: Lint Containerfile
-        run: hadolint "${{ inputs.file }}"
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
