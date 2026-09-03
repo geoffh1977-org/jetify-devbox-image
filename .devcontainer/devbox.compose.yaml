@@ -1,44 +1,67 @@
 services:
+  # Init User Owned Volumes
+  init-devbox-volumes:
+    image: geoffh1977/jetify-devbox:latest
+    user: "0:0"
+    environment:
+      #Devbox User/Group Id
+      - DEVBOX_UID=${DEVBOX_UID:-1000}
+      - DEVBOX_GID=${DEVBOX_GID:-1000}
+
+    entrypoint: ["/usr/local/bin/chown-volumes.sh", "-u", "${DEVBOX_UID:-1000}", "-g", "${DEVBOX_GID:-1000}", "/managed"]
+    volumes:
+      - devbox_user_cache:/managed/devbox_user_cache
+
+  # Development Container
   dev:
     image: geoffh1977/jetify-devbox:latest
 
     environment:
-      # Imported Environment Variables
+      # Devbox User/Group Id
+      - DEVBOX_UID=${DEVBOX_UID:-1000}
+      - DEVBOX_GID=${DEVBOX_GID:-1000}
+
+      # Host Docker Id
       - DOCKER_GID
 
       # GPG Agent Socket For Git GPG Signing
-      - GPG_AGENT_SOCKET=${GPG_AGENT_SOCKET:-/run/user/${UID:-1000}/gnupg/S.gpg-agent}
-      - GPG_AGENT_INFO=${GPG_AGENT_SOCKET:-/run/user/${UID:-1000}/gnupg/S.gpg-agent}
+      - GPG_AGENT_SOCKET=${GPG_AGENT_SOCKET:-/run/user/${DEVBOX_UID:-1000}/gnupg/S.gpg-agent}
+      - GPG_AGENT_INFO=${GPG_AGENT_SOCKET:-/run/user/${DEVBOX_UID:-1000}/gnupg/S.gpg-agent}
 
     volumes:
-      # Per-user caches persist without replacing the image's Nix store.
+      # Cache Persistence Via Local Volumes
       - nix_store:/nix
-      - devbox_user_cache:/home/${UNAME:-devbox}/.devbox
-      - bash_user_cache:/home/${UNAME:-devbox}/.config/bash
+      - devbox_user_cache:/home/devbox/.devbox
 
       # Mount The Current Project Directory
       - ${PWD}:/Project:cached
 
       # Mount GPG Socket Path (Needed For Git)
-      - /run/user/${UID:-1000}/gnupg:/run/user/${UID:-1000}/gnupg:ro
+      - /run/user/${DEVBOX_UID:-1000}/gnupg:/run/user/${DEVBOX_UID:-1000}/gnupg:ro
 
       # Docker Docket Mount (For Docker-In-Docker)
       - /var/run/docker.sock:/var/run/docker.sock
 
       # Environment Configuration Files
-      - ${ENVIRONMENT_PATH}/.config/git/config:/home/${UNAME:-devbox}/.config/git/config:ro
-      - ${ENVIRONMENT_PATH}/.docker:/home/${UNAME:-devbox}/.docker
-      - ${ENVIRONMENT_PATH}/.ssh:/home/${UNAME:-devbox}/.ssh:ro
+      - ${ENVIRONMENT_PATH}/.config/git/config:/home/devbox/.config/git/config:ro
+      - ${ENVIRONMENT_PATH}/.docker:/home/devbox/.docker
+      - ${ENVIRONMENT_PATH}/.ssh:/home/devbox/.ssh:ro
 
-    working_dir: /home/${UNAME:-devbox}
+    depends_on:
+      # Ensures init-permissions runs AND exits with code 0 before app starts
+      init-devbox-volumes:
+        condition: service_completed_successfully
+
+    working_dir: /home/devbox
     stdin_open: true
     tty: true
     cap_add:
       - SYS_ADMIN
+
+    # Disable Seccomp For Docker-In-Docker And MacOS Compatibility
     security_opt:
       - seccomp:unconfined
 
 volumes:
   nix_store:
   devbox_user_cache:
-  bash_user_cache:
