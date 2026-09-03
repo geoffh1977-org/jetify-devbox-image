@@ -1,3 +1,7 @@
 {
-    "hadolint.hadolintPath": "/Project/.devbox/nix/profile/default/bin/hadolint"
-}
+    "hadolint.hadolintPath": "/Project/.devbox/nix/profile/default/bin/hadolint",
+    "direnv.path.executable": "direnv",
+    "json.schemaDownload.trustedDomains": {
+        "https://raw.githubusercontent.com/jetify-com/devbox/": true
+    }
+  }
