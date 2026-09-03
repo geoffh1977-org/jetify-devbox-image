@@ -90,7 +90,8 @@ RUN curl --fail --location --proto '=https' --tlsv1.2 --silent --show-error \
 USER root
 
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod 0755 /usr/local/bin/entrypoint.sh \
+COPY scripts/chown-volumes.sh /usr/local/bin/chown-volumes.sh
+RUN chmod 0755 /usr/local/bin/entrypoint.sh /usr/local/bin/chown-volumes.sh \
   && mkdir -p "/home/${UNAME}/.config/direnv" \
   && printf '%s\n' \
     '[global]' \

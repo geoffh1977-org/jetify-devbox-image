@@ -64,23 +64,24 @@ initializer before starting the `devbox` service. It mounts only the named
 volumes selected in the Compose declaration at neutral paths and changes only
 those paths. It does not mount the Docker socket or any host bind path.
 
-Use this generic Compose pattern, substituting the UID:GID and named volumes
-used by your service:
+Use this generic Compose pattern. The initializer runs the image's
+`chown-volumes` helper as root; Compose substitutes `DEVBOX_UID` and
+`DEVBOX_GID` (or `1000` when they are unset):
 
 ```yaml
 services:
   init-devbox-volumes:
     image: geoffh1977/jetify-devbox:latest
     user: "0:0"
-    entrypoint: ["/bin/bash", "-ceu", "chown -R -- 502:20 /managed/.devbox /managed/.vscode-server"]
+    entrypoint: ["/usr/local/bin/chown-volumes", "-u", "${DEVBOX_UID:-1000}", "-g", "${DEVBOX_GID:-1000}", "-R", "/managed"]
     volumes:
       - devbox-state:/managed/.devbox
       - vscode-state:/managed/.vscode-server
 
   devbox:
     environment:
-      DEVBOX_UID: "502"
-      DEVBOX_GID: "20"
+      DEVBOX_UID: "${DEVBOX_UID:-1000}"
+      DEVBOX_GID: "${DEVBOX_GID:-1000}"
     volumes:
       - devbox-state:/home/devbox/.devbox
       - vscode-state:/home/devbox/.vscode-server
@@ -94,12 +95,18 @@ normally. Do not add host bind mounts to the initializer; migration scope is
 the exact list of named-volume declarations above. For a direct equivalent:
 
 ```sh
-docker run --rm \
+docker run --rm --user 0:0 --entrypoint /usr/local/bin/chown-volumes \
   -v devbox-state:/managed/.devbox \
   -v vscode-state:/managed/.vscode-server \
-  ubuntu:24.04 \
-  chown -R -- 502:20 /managed/.devbox /managed/.vscode-server
+  geoffh1977/jetify-devbox:latest \
+  -u 502 -g 20 -R /managed
 ```
+
+Use `-t` (or `--include-root`) only when the named volume is mounted directly
+at `/managed`; by default the helper selects immediate real directories below
+`/managed` and ignores symlinks. It skips targets already owned by the requested
+UID:GID, changes only `root:root` targets, and exits nonzero rather than changing
+any other ownership.
 
 The runtime entrypoint continues to repair the base managed roots and their
 non-mounted content. It prunes every descendant mount before checking or
