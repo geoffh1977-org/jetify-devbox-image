@@ -24,7 +24,7 @@ build_owned_find_args() {
   local first_mount=true
 
   # Start at the managed root so a restrictive home directory itself is repaired.
-  # Descendant mount targets are pruned before ownership predicates are evaluated.
+  # Every descendant mount is pruned, regardless of mount source.
   find_args=("$managed_root" -xdev)
   for mount_root in "${descendant_mounts[@]}"; do
     if [ "$first_mount" = true ]; then
@@ -44,13 +44,12 @@ mount_is_readonly() {
   findmnt --noheadings --raw --output OPTIONS --target "$1" | tr ',' '\n' | grep --quiet --line-regexp ro
 }
 
-repair_managed_root() {
+repair_current_root() {
   local managed_root=$1
   local user_uid=$2
   local user_gid=$3
   local mismatched_path
 
-  find_descendant_mounts "$managed_root"
   build_owned_find_args "$managed_root"
   mismatched_path=$(find "${find_args[@]}" \( ! -uid "$user_uid" -o ! -gid "$user_gid" \) -print -quit)
   if [ -z "$mismatched_path" ]; then
@@ -72,6 +71,15 @@ repair_managed_root() {
     echo "Cannot repair ownership of $managed_root for $user_uid:$user_gid. The managed root must be writable before startup." >&2
     exit 1
   fi
+}
+
+repair_managed_root() {
+  local managed_root=$1
+  local user_uid=$2
+  local user_gid=$3
+
+  find_descendant_mounts "$managed_root"
+  repair_current_root "$managed_root" "$user_uid" "$user_gid"
 }
 
 set_runtime_identity() {
