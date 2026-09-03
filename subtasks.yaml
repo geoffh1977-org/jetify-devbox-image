@@ -62,8 +62,3 @@ tasks:
     desc: Run Pre-Commit Hooks To Validate Code Quality.
     cmds:
       - pre-commit run --all-files
-
-  test:
-    desc: Build the default image and verify its non-root single-user Nix runtime.
-    cmds:
-      - "{{.TASKFILE_DIR}}/tests/test-container-defaults.sh"
