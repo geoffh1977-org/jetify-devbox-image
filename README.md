@@ -43,21 +43,21 @@ Both variables are required together and must be decimal integers from `1`
 through `60000`.
 The image refuses a UID already assigned to another account. If the requested
 GID already exists, `devbox` safely uses that group; otherwise the entrypoint
-creates a dedicated group. At startup it repairs ownership of `/home/devbox`
-and `/nix` only; it does not recursively change ownership under `/Project`.
-Each mount at or below either managed path is checked independently. This safely
-supports persisted nested mounts such as `/home/devbox/.devbox`,
-`/home/devbox/.vscode-server`, and
-`/home/devbox/.vscode-server/data`: a writable mismatched child mount is
-repaired without crossing into another mounted filesystem. A read-only child
-must already match the mapped UID:GID; otherwise startup names that child mount
-in its actionable error.
-Those managed mounts may be read-only when they already belong to the mapped
-UID:GID. If ownership needs repair, they must be mounted writable for one
-startup; the entrypoint exits with an actionable error rather than continuing
-with a broken single-user Nix or home directory.
-`VOLUME_MOUNTS` is no longer used for ownership changes: arbitrary
-environment-provided paths are intentionally not recursively changed.
+creates a dedicated group. At startup it repairs ownership of each fixed
+managed root (`/home/devbox` and `/nix`) **and its non-mounted content**. Every
+descendant mount target is explicitly pruned before ownership is checked or
+changed, so nested file or directory mounts such as `/home/devbox/devbox.lock`,
+`/home/devbox/Projects`, `.devbox`, plugins, and data retain the
+host/Docker-reported ownership. This preserves Docker Desktop and host sharing
+boundaries while ensuring the base home directory itself remains traversable
+when it has restrictive permissions.
+
+The managed root mounts themselves may be read-only when they already belong to
+the mapped UID:GID. If either root needs repair, mount that root writable for
+one startup; the entrypoint exits with an actionable error rather than
+continuing with a broken single-user Nix or home directory. `/Project` is never
+touched. `VOLUME_MOUNTS` is not used for ownership changes: arbitrary
+environment-provided paths are intentionally excluded.
 
 ## VS Code and devcontainers
 

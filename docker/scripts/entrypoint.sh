@@ -3,37 +3,39 @@ set -euo pipefail
 
 nonroot_user=${NONROOT_USER:-devbox}
 
-managed_mount_roots=()
+descendant_mounts=()
+find_args=()
 
-find_managed_mount_roots() {
+find_descendant_mounts() {
   local managed_root=$1
   local mount_root
 
+  descendant_mounts=()
   while IFS= read -r mount_root; do
-    if { [ "$mount_root" = "$managed_root" ] || [[ "$mount_root" == "$managed_root/"* ]]; } && [ "$mount_root" != "$managed_root" ]; then
-      managed_mount_roots+=("$mount_root")
+    if [ "$mount_root" != "$managed_root" ] && [[ "$mount_root" == "$managed_root/"* ]]; then
+      descendant_mounts+=("$mount_root")
     fi
   done < <(findmnt --noheadings --raw --output TARGET --submounts --target "$managed_root")
 }
 
-find_args_for_mount() {
-  local mount_root=$1
-  local child_mount
-  local first_child=true
+build_owned_find_args() {
+  local managed_root=$1
+  local mount_root
+  local first_mount=true
 
-  find_args=("$mount_root" -xdev)
-  for child_mount in "${managed_mount_roots[@]}"; do
-    if [ "$child_mount" != "$mount_root" ] && [[ "$child_mount" == "$mount_root/"* ]]; then
-      if [ "$first_child" = true ]; then
-        find_args+=(\()
-        first_child=false
-      else
-        find_args+=(-o)
-      fi
-      find_args+=(-path "$child_mount")
+  # Start at the managed root so a restrictive home directory itself is repaired.
+  # Descendant mount targets are pruned before ownership predicates are evaluated.
+  find_args=("$managed_root" -xdev)
+  for mount_root in "${descendant_mounts[@]}"; do
+    if [ "$first_mount" = true ]; then
+      find_args+=(\()
+      first_mount=false
+    else
+      find_args+=(-o)
     fi
+    find_args+=(-path "$mount_root")
   done
-  if [ "$first_child" = false ]; then
+  if [ "$first_mount" = false ]; then
     find_args+=(\) -prune -o)
   fi
 }
@@ -42,46 +44,34 @@ mount_is_readonly() {
   findmnt --noheadings --raw --output OPTIONS --target "$1" | tr ',' '\n' | grep --quiet --line-regexp ro
 }
 
-repair_managed_mount() {
-  local mount_root=$1
+repair_managed_root() {
+  local managed_root=$1
   local user_uid=$2
   local user_gid=$3
   local mismatched_path
 
-  find_args_for_mount "$mount_root"
+  find_descendant_mounts "$managed_root"
+  build_owned_find_args "$managed_root"
   mismatched_path=$(find "${find_args[@]}" \( ! -uid "$user_uid" -o ! -gid "$user_gid" \) -print -quit)
   if [ -z "$mismatched_path" ]; then
     return
   fi
 
-  if mount_is_readonly "$mount_root"; then
-    echo "Cannot repair ownership of $mount_root: it is read-only and is not owned by $user_uid:$user_gid. Mount it writable once to repair ownership, or mount it with UID:GID $user_uid:$user_gid." >&2
+  if mount_is_readonly "$managed_root"; then
+    echo "Cannot repair ownership of $managed_root: it is read-only and is not owned by $user_uid:$user_gid. Mount it writable once to repair ownership, or mount it with UID:GID $user_uid:$user_gid." >&2
     exit 1
   fi
 
-  if ! find "${find_args[@]}" -exec chown --no-dereference "$user_uid:$user_gid" {} + >/dev/null 2>&1; then
-    echo "Cannot repair ownership of $mount_root for $user_uid:$user_gid. The managed mount must be writable before startup." >&2
+  if ! find "${find_args[@]}" \( ! -uid "$user_uid" -o ! -gid "$user_gid" \) -exec chown --no-dereference "$user_uid:$user_gid" {} + >/dev/null 2>&1; then
+    echo "Cannot repair ownership of $managed_root for $user_uid:$user_gid. The managed root must be writable before startup." >&2
     exit 1
   fi
 
   mismatched_path=$(find "${find_args[@]}" \( ! -uid "$user_uid" -o ! -gid "$user_gid" \) -print -quit)
   if [ -n "$mismatched_path" ]; then
-    echo "Cannot repair ownership of $mount_root for $user_uid:$user_gid. The managed mount must be writable before startup." >&2
+    echo "Cannot repair ownership of $managed_root for $user_uid:$user_gid. The managed root must be writable before startup." >&2
     exit 1
   fi
-}
-
-repair_managed_root() {
-  local managed_root=$1
-  local user_uid=$2
-  local user_gid=$3
-  local mount_root
-
-  managed_mount_roots=("$managed_root")
-  find_managed_mount_roots "$managed_root"
-  for mount_root in "${managed_mount_roots[@]}"; do
-    repair_managed_mount "$mount_root" "$user_uid" "$user_gid"
-  done
 }
 
 set_runtime_identity() {
