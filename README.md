@@ -24,6 +24,41 @@ Mount a project directory when working on a repository:
 docker run --rm -it -v "$PWD:/Project" geoffh1977/jetify-devbox:latest
 ```
 
+### Host identity mapping
+
+By default the container runs as `devbox` with UID and GID `1000`. Set both
+`DEVBOX_UID` and `DEVBOX_GID` to run as a different numeric identity, for
+example when a mounted home directory or Nix volume belongs to your host user:
+
+```sh
+docker run --rm -it \
+  -e DEVBOX_UID=502 \
+  -e DEVBOX_GID=20 \
+  -v devbox-nix:/nix \
+  -v devbox-home:/home/devbox \
+  geoffh1977/jetify-devbox:latest
+```
+
+Both variables are required together and must be decimal integers from `1`
+through `60000`.
+The image refuses a UID already assigned to another account. If the requested
+GID already exists, `devbox` safely uses that group; otherwise the entrypoint
+creates a dedicated group. At startup it repairs ownership of `/home/devbox`
+and `/nix` only; it does not recursively change ownership under `/Project`.
+Each mount at or below either managed path is checked independently. This safely
+supports persisted nested mounts such as `/home/devbox/.devbox`,
+`/home/devbox/.vscode-server`, and
+`/home/devbox/.vscode-server/data`: a writable mismatched child mount is
+repaired without crossing into another mounted filesystem. A read-only child
+must already match the mapped UID:GID; otherwise startup names that child mount
+in its actionable error.
+Those managed mounts may be read-only when they already belong to the mapped
+UID:GID. If ownership needs repair, they must be mounted writable for one
+startup; the entrypoint exits with an actionable error rather than continuing
+with a broken single-user Nix or home directory.
+`VOLUME_MOUNTS` is no longer used for ownership changes: arbitrary
+environment-provided paths are intentionally not recursively changed.
+
 ## VS Code and devcontainers
 
 Use the image in a `.devcontainer/devcontainer.json` file, replacing the namespace with the published Docker Hub namespace:
