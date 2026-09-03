@@ -14,7 +14,8 @@ permissions:
 jobs:
   verify:
     if: github.ref != 'refs/heads/main'
-    uses: ./.github/workflows/_docker_image.yml
+    # uses: ./.github/workflows/_docker_image.yml
+    uses: geoffh1977-org/github-actions/.github/workflows/docker-image.yml@main
     with:
       context: docker
       file: docker/Containerfile
@@ -27,7 +28,8 @@ jobs:
 
   publish:
     if: github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/_docker_image.yml
+    # uses: ./.github/workflows/_docker_image.yml
+    uses: geoffh1977-org/github-actions/.github/workflows/docker-image.yml@main
     with:
       context: docker
       file: docker/Containerfile

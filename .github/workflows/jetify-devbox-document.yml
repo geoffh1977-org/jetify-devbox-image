@@ -14,7 +14,8 @@ permissions:
 
 jobs:
   update-docker-hub-description:
-    uses: ./.github/workflows/_docker_document.yml
+    # uses: ./.github/workflows/_docker_document.yml
+    uses: geoffh1977-org/github-actions/.github/workflows/docker-hub-documentation.yml@main
     with:
       image: ${{ vars.DOCKER_USERNAME }}/jetify-devbox
       docker-username: ${{ vars.DOCKER_USERNAME }}
