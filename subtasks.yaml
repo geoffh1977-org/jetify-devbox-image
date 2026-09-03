@@ -58,11 +58,6 @@ tasks:
           docker rmi -f {{.IMAGE_USERNAME}}/{{.IMAGE_NAME}}:${OLD_VERSION}
         done
 
-  test:
-    desc: Run Docker entrypoint behavior tests.
-    cmds:
-      - "{{.TASKFILE_DIR}}/tests/docker-entrypoint-test.sh"
-
   check:
     desc: Run Pre-Commit Hooks To Validate Code Quality.
     cmds:
