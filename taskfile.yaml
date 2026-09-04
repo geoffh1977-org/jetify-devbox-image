@@ -1,8 +1,10 @@
 ---
+# Docker Image Build And Push Taskfile For Devbox Development Environment.
 version: '3'
 
-includes:
-  devbox: ./subtasks.yaml
+vars:
+  IMAGE_USERNAME: "geoffh1977"
+  IMAGE_NAME: "jetify-devbox"
 
 tasks:
 
@@ -13,3 +15,60 @@ tasks:
     silent: true
     aliases:
       - list
+
+  get-version:
+    desc: Refresh .devbox-version from the latest Devbox release.
+    cmds:
+      - "{{.TASKFILE_DIR}}/scripts/get-devbox-version"
+
+  build:
+    desc: Build The Docker Image.
+    deps: [get-version]
+    cmds:
+      - |
+        DEVBOX_VERSION=$(cat "{{.TASKFILE_DIR}}/.devbox-version")
+        cd "{{.TASKFILE_DIR}}/docker"
+        docker build -f Containerfile -t {{.IMAGE_USERNAME}}/{{.IMAGE_NAME}}:latest --build-arg UID=$(id -u) --build-arg GID=$(id -g) --build-arg DEVBOX_VERSION="$DEVBOX_VERSION" .
+        docker tag {{.IMAGE_USERNAME}}/{{.IMAGE_NAME}}:latest {{.IMAGE_USERNAME}}/{{.IMAGE_NAME}}:"$DEVBOX_VERSION"
+
+  force-build:
+    desc: Build The Docker Image Without Using Cache.
+    deps: [get-version]
+    cmds:
+      - |
+        DEVBOX_VERSION=$(cat "{{.TASKFILE_DIR}}/.devbox-version")
+        cd "{{.TASKFILE_DIR}}/docker"
+        docker build --no-cache -f Containerfile -t {{.IMAGE_USERNAME}}/{{.IMAGE_NAME}}:latest --build-arg UID=$(id -u) --build-arg GID=$(id -g) --build-arg DEVBOX_VERSION="$DEVBOX_VERSION" .
+        docker tag {{.IMAGE_USERNAME}}/{{.IMAGE_NAME}}:latest {{.IMAGE_USERNAME}}/{{.IMAGE_NAME}}:"$DEVBOX_VERSION"
+
+  push:
+    desc: Push The Docker Image To The Registry.
+    deps: [get-version]
+    cmds:
+      - docker push {{.IMAGE_USERNAME}}/{{.IMAGE_NAME}}:latest
+      - |
+        DEVBOX_VERSION=$(cat "{{.TASKFILE_DIR}}/.devbox-version")
+        docker push {{.IMAGE_USERNAME}}/{{.IMAGE_NAME}}:"$DEVBOX_VERSION"
+
+  build-and-push:
+    desc: Build And Push The Docker Image In A Single Step.
+    cmds:
+      - task: build
+      - task: push
+      - task: clean
+
+  clean:
+    desc: Clean Up The Old Docker Images.
+    deps: [get-version]
+    cmds:
+      - |
+        DEVBOX_VERSION=$(cat "{{.TASKFILE_DIR}}/.devbox-version")
+        for OLD_VERSION in $(docker images --format table | grep devbox | grep -v latest | awk '{print $2}' | sort -r | grep -v "$DEVBOX_VERSION")
+        do
+          docker rmi -f {{.IMAGE_USERNAME}}/{{.IMAGE_NAME}}:${OLD_VERSION}
+        done
+
+  check:
+    desc: Run Pre-Commit Hooks To Validate Code Quality.
+    cmds:
+      - pre-commit run --all-files
