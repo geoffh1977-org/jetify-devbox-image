@@ -2,6 +2,11 @@
 
 A development container image that installs [Jetify Devbox](https://www.jetify.com/devbox) with a non-root user and a single-user Nix installation.
 
+## Companion projects
+
+- [Jetify Devbox Profiles](https://github.com/geoffh1977-org/jetify-devbox-profiles) provides ready-to-copy VS Code Dev Container and Compose templates built on this image.
+- [Jetify Devbox Plugins](https://github.com/geoffh1977-org/jetify-devbox-plugins) provides reusable Devbox plugins, including a Zsh-based interactive shell environment.
+
 ## Features
 
 - Ubuntu 24.04 base image with Devbox installed from its release archive.
@@ -57,56 +62,86 @@ uses a Docker socket, container ID, hostname, cgroup data, or environment path
 to override that rule. This keeps Docker Desktop and host bind mounts below
 `/home/devbox` or `/nix` outside its recursive ownership traversal.
 
-### One-shot named-volume ownership migration
+### Minimal Compose setup with named-volume initialization
 
-If named-volume state was previously created as root, run a separate one-shot
-initializer before starting the `devbox` service. It mounts only the named
-volumes selected in the Compose declaration at neutral paths and changes only
-those paths. It does not mount the Docker socket or any host bind path.
+Use this complete Compose file as a minimal persistent Devbox environment. It
+matches the volume-initialization pattern used by the Devbox profile templates:
+`init-volumes` mounts only the named `devbox-cache` volume at a neutral path,
+then the `dev` service mounts it at its runtime location.
 
-Use this generic Compose pattern. The initializer runs the image's
-`chown-volumes` helper as root; Compose substitutes `DEVBOX_UID` and
-`DEVBOX_GID` (or `1000` when they are unset):
+Save it as `compose.yaml` beside the project you want to mount:
 
 ```yaml
 services:
-  init-devbox-volumes:
+  init-volumes:
     image: geoffh1977/jetify-devbox:latest
     user: "0:0"
-    entrypoint: ["/usr/local/bin/chown-volumes", "-u", "${DEVBOX_UID:-1000}", "-g", "${DEVBOX_GID:-1000}", "-R", "/managed"]
+    entrypoint:
+      - /usr/local/bin/chown-volumes.sh
+      - -u
+      - "${DEVBOX_UID:-1000}"
+      - -g
+      - "${DEVBOX_GID:-1000}"
+      - -R
+      - /managed
     volumes:
-      - devbox-state:/managed/.devbox
-      - vscode-state:/managed/.vscode-server
+      - devbox-cache:/managed/devbox-cache
 
-  devbox:
+  dev:
+    image: geoffh1977/jetify-devbox:latest
     environment:
       DEVBOX_UID: "${DEVBOX_UID:-1000}"
       DEVBOX_GID: "${DEVBOX_GID:-1000}"
     volumes:
-      - devbox-state:/home/devbox/.devbox
-      - vscode-state:/home/devbox/.vscode-server
+      - nix-store:/nix
+      - devbox-cache:/home/devbox/.cache
+      - ./:/Project:cached
+    depends_on:
+      init-volumes:
+        condition: service_completed_successfully
+    working_dir: /Project
+    stdin_open: true
+    tty: true
+
 volumes:
-  devbox-state:
-  vscode-state:
+  nix-store:
+  devbox-cache:
 ```
 
-Run `docker compose run --rm init-devbox-volumes` once, then start `devbox`
-normally. Do not add host bind mounts to the initializer; migration scope is
-the exact list of named-volume declarations above. For a direct equivalent:
+Set the identity values in a local `.env` file when your host user is not
+`1000:1000`:
+
+```dotenv
+DEVBOX_UID=502
+DEVBOX_GID=20
+```
+
+Start an interactive Devbox shell with:
 
 ```sh
-docker run --rm --user 0:0 --entrypoint /usr/local/bin/chown-volumes \
-  -v devbox-state:/managed/.devbox \
-  -v vscode-state:/managed/.vscode-server \
-  geoffh1977/jetify-devbox:latest \
-  -u 502 -g 20 -R /managed
+docker compose run --rm dev devbox shell
 ```
 
-Use `-t` (or `--include-root`) only when the named volume is mounted directly
-at `/managed`; by default the helper selects immediate real directories below
-`/managed` and ignores symlinks. It skips targets already owned by the requested
-UID:GID, changes only `root:root` targets, and exits nonzero rather than changing
-any other ownership.
+Or start the long-lived service for an IDE or another Compose consumer:
+
+```sh
+docker compose up -d dev
+```
+
+The initializer is deliberately run as root and executes
+`/usr/local/bin/chown-volumes.sh` directly, bypassing the normal image
+entrypoint. It selects the immediate directories under `/managed`, recursively
+migrates only `root:root` content, skips content already owned by the requested
+UID:GID, and fails rather than changing any other ownership. The direct
+`nix-store:/nix` mount does not need to be added to the initializer: `/nix` is a
+fixed runtime-managed root. Do not add host bind mounts—including `/Project`—to
+`init-volumes`.
+
+For additional persistent home-state volumes, add each named volume below
+`/managed` in `init-volumes`, and mount that same volume at its final location in
+`dev`. For example, a VS Code server volume could be mounted as
+`vscode-server:/managed/vscode-server` in the initializer and
+`vscode-server:/home/devbox/.vscode-server` in the `dev` service.
 
 The runtime entrypoint continues to repair the base managed roots and their
 non-mounted content. It prunes every descendant mount before checking or
